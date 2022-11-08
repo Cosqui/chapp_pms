@@ -1,4 +1,4 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect , get_object_or_404
 from django.views import View
 from .models import Room
 from .forms import *
@@ -7,6 +7,7 @@ from .form_dates import Ymd
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils.decorators import method_decorator
 from .reservation_code import generate
+from django.contrib import messages
 # Create your views here.
 
 
@@ -267,3 +268,52 @@ class RoomsView(View):
         }
 
         return render(request, "rooms.html", context)
+
+
+class BookingEdit(View):
+    def get(self,request,pk):
+        booking = get_object_or_404(Booking,pk=pk)
+        initial_data = {
+            'guests':booking.guests,
+            'checkin':booking.checkin,
+            'checkout':booking.checkout
+        }
+        form = RoomSearchForm(initial=initial_data)
+        form.fields["guests"].widget.attrs['readonly'] = True
+        context={
+            'form':form
+        }
+        return render(request, "booking_edit.html", context)
+
+    def post(self,request,pk):
+        booking = get_object_or_404(Booking,pk=pk)
+        form = RoomSearchForm(request.POST)
+        if form.is_valid():
+            checkin = request.POST.get('checkin')
+            checkout = request.POST.get('checkout')
+            room = (Booking.objects
+                    .filter(
+                    checkin__lte = checkin,
+                    checkout__gte = checkout,
+                    state__exact = "NEW",
+                    room=booking.room
+                    )
+                )
+            if(room or checkin 
+            > checkout):
+                messages.warning(request, '''Is reserved room this dates 
+                / Date of checkin cannot be bigger''')
+                
+            else:
+                booking.checkin =checkin
+                booking.checkout = checkout
+                booking.save()
+                
+                messages.success(request, 'Bookin is updated')
+        context={
+            'form':form
+        }
+        return render(request, "booking_edit.html", context)
+
+
+
